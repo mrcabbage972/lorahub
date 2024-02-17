@@ -4,7 +4,7 @@ import os
 dataset_folder = "flan_task"
 
 def download_flan():
-    dataset = load_dataset("conceptofmind/FLAN_2022", split="train")
+    dataset = load_dataset("lorahub/flanv2", split="train")
     # filter some examples from the dataset
     dataset = dataset.filter(lambda example: example['template_type'] == "zs_noopt", num_proc=32)
     # group the dataset using the task_name

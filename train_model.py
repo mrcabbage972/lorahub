@@ -101,6 +101,9 @@ class ModelArguments:
         default=True,
         metadata={"help": "Whether to use lora tuning or not."},
     )
+    lora_layers_to_transform: int = field(
+        default=True,
+        metadata={"help": "lora layer."})
 
 
 @dataclass
@@ -391,7 +394,8 @@ def main():
             inference_mode=False,
             r=model_args.lora_r,
             lora_alpha=32,
-            lora_dropout=0.1)
+            lora_dropout=0.1,
+            layers_to_transform=model_args.lora_layers_to_transform)
         model = get_peft_model(model, peft_config)
         model.print_trainable_parameters()
 
