@@ -45,13 +45,13 @@ def load_base_model_and_lora_modules(lora_module_list: List[str], task_lora_path
     peft_model = peft_model.to(device)
     peft_model.eval()
 
-    print("> Begin to load lora modules")
+    #print("> Begin to load lora modules")
     cache = {}
 
     first_dict = None
 
     for peft_model_id in tqdm(lora_module_list):
-        print("> Loading {} ...".format(peft_model_id))
+        #print("> Loading {} ...".format(peft_model_id))
         cur_peft_model = PeftModel.from_pretrained(base_model, os.path.join(task_lora_path, peft_model_id))
         cache[peft_model_id] = copy.deepcopy(get_peft_model_state_dict(cur_peft_model))
 
@@ -281,8 +281,8 @@ def lorahub_learning(task_lora_path,
         lower=[-1.5] * number_of_loras,
     )
     optimizer = ng.optimizers.NGOpt(parametrization=instrum, budget=max_inference_step)
-    print("> Begin to perform gradient-free optimization ...")
-    recommendation = optimizer.minimize(get_score_partial, verbosity=1)
+    #print("> Begin to perform gradient-free optimization ...")
+    recommendation = optimizer.minimize(get_score_partial, verbosity=0)
     final_lora = get_final_weights(recommendation.value, lora_module_list, cache)
     # set the final weights
     set_peft_model_state_dict(model, final_lora)
