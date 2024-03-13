@@ -71,7 +71,7 @@ def get_lora_module_list_retrieved(ood_dataset_eval, text_ds, target_task_names,
 
 
 
-def main(task_lora_path, ood_dataset_path, target_task_name, ood_dataset_eval=None):
+def main(task_lora_path, ood_dataset_path, ood_dataset_eval=None):
     """
     Perform lorahub learning
     """
@@ -165,4 +165,4 @@ if __name__ == "__main__":
         ood_dataset_eval = pickle.load(f)
 
     #main(loras_path, ood_dataset_path, target_task_names, ood_dataset_eval)
-    main(loras_path, ood_dataset_path, target_task_names)
+    main(loras_path, ood_dataset_path)
