@@ -15,7 +15,7 @@ def get_examples_for_learning(ds, target_task_name, num_train_examples=5, num_in
     """
 
     #ds = datasets.load_from_disk(ood_dataset_path)
-    ds = ds.filter(lambda x: x['task_name'] == target_task_name, num_proc=multiprocessing.cpu_count())
+    ds = ds.filter(lambda x: x['clean_task_name'] == target_task_name, num_proc=multiprocessing.cpu_count())
 
     assert len(ds) > 0, 'Task not found in dataset'
 
@@ -77,10 +77,17 @@ def main(task_lora_path, ood_dataset_path, target_task_name, ood_dataset_eval=No
     """
     #task_text_path = '/home/ubuntu/victor/retrieval-of-experts/data/split_loras'
     text_ds = datasets.load_from_disk(ood_dataset_path)
+
+    target_task_names = text_ds.to_pandas()['clean_task_name'].unique()
+
+    print("target_task_names")
+    print(target_task_names)
     
     results = []
 
     for target_task_name in target_task_names:
+        print("target_task_name:", target_task_name)
+
         train_examples, inference_examples = get_examples_for_learning(text_ds, target_task_name)
 
         # get a list of modules to be used in the composition
@@ -110,7 +117,7 @@ def main(task_lora_path, ood_dataset_path, target_task_name, ood_dataset_eval=No
                                                             max_inference_step=40,
                                                             batch_size=5)
 
-        #print("module_weights:", module_weights)
+        print("module_weights:", module_weights)
 
         """
         Perform inference to get predictions
@@ -143,17 +150,17 @@ if __name__ == "__main__":
     loras_path = '/home/ubuntu/victor/retrieval-of-experts/data/loras'
     #ood_dataset_path = '/home/ubuntu/victor/retrieval-of-experts/data/flanv2_tokenized_new_splits/ood'
     ood_dataset_path = '/home/ubuntu/victor/retrieval-of-experts/data/split_loras/ood'
-    target_task_names = ['duorc_ParaphraseRC_generate_question',
+    """target_task_names = ['duorc_ParaphraseRC_generate_question',
        'quail_context_question_description_text',
        'race_high_Write_a_multi_choice_question_for_the_following_article',
        'race_high_Read_the_article_and_answer_the_question_no_option_',
        'duorc_ParaphraseRC_answer_question', 'quail_no_prompt_id',
        'quail_description_context_question_text',
        'quartz_answer_question_below', 'quoref_Guess_Answer',
-       'amazon_polarity_user_satisfied']
+       'amazon_polarity_user_satisfied']"""
     
 
-    ood_dataset_eval_path = '/home/ubuntu/victor/eval_output_dict.p'
+    ood_dataset_eval_path = '/home/ubuntu/victor/retrieval-of-experts/eval_output_dict_test.p'
     with open(ood_dataset_eval_path, "rb") as f:
         ood_dataset_eval = pickle.load(f)
 
