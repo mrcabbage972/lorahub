@@ -7,6 +7,24 @@ import multiprocessing
 import json
 import torch
 import gc
+import os
+
+from transformers import AutoModelForSeq2SeqLM
+import torch
+from datasets import Dataset
+from torch.utils.data import DataLoader
+from transformers import default_data_collator
+from transformers import AutoTokenizer
+from tqdm import tqdm
+import pandas as pd
+import numpy
+import random
+import nevergrad as ng
+from peft.utils.save_and_load import set_peft_model_state_dict, get_peft_model_state_dict
+from peft import PeftModel, PeftConfig
+from functools import partial
+from typing import List, Optional, Union
+import copy
 import pickle
 
 def get_examples_for_learning(ds, target_task_name, num_train_examples=5, num_inference_examples=100):
@@ -42,34 +60,6 @@ def get_lora_module_list_fixed(task_lora_path):
     assert len(lora_module_names) > 0, f'No tasks found in {task_lora_path}'
     return random.sample(lora_module_names, 20)
     
-def get_lora_module_list_retrieved(ood_dataset_eval, text_ds, target_task_names, train_examples):
-    
-    # Get the indices of train_examples
-    text_inputs = text_ds['inputs']
-    train_example_indices = [text_inputs.index(example['input']) for example in train_examples]
-
-    # Get the relevant rows in the retrieved ranks
-    retrieved_ranks = ood_dataset_eval['named_ranks']
-    relevant_rows = [retrieved_ranks[i] for i in train_example_indices]
-
-    # For each module, get all the ranks at which it was retrieved
-    module_ranks = {}
-    for row in relevant_rows:
-        for i, module in enumerate(row):
-            if module in target_task_names:
-                continue # Skipping OOD tasks
-            if module not in module_ranks:
-                module_ranks[module] = []
-            module_ranks[module].append(i)
-
-    # Calculate the mean rank for each module and return the top 20
-    module_mean_ranks = {module: sum(ranks) / len(ranks) for module, ranks in module_ranks.items()}
-    sorted_modules = sorted(module_mean_ranks.items(), key=lambda x: x[1])
-    return [module for module, _ in sorted_modules[:20]]
-
-    
-
-
 
 def main(task_lora_path, ood_dataset_path, ood_dataset_eval=None):
     """
@@ -90,14 +80,9 @@ def main(task_lora_path, ood_dataset_path, ood_dataset_eval=None):
 
         train_examples, inference_examples = get_examples_for_learning(text_ds, target_task_name)
 
-        # get a list of modules to be used in the composition
-        if ood_dataset_eval is None:
-            print('Using fixed module list')
-            modules = get_lora_module_list_fixed(loras_path)
-        else:
-            print('Using retrieved module list')
-            modules = get_lora_module_list_retrieved(ood_dataset_eval, text_ds, target_task_names, train_examples)
-        print("modules:", modules)
+       
+        modules = get_lora_module_list_fixed(loras_path)
+
 
         gc.collect()
         torch.cuda.empty_cache()
@@ -110,14 +95,25 @@ def main(task_lora_path, ood_dataset_path, ood_dataset_eval=None):
             examples_outputs.append(example["output"])
 
         # perform LoRAHub learning
-        module_weights, model, tokenizer = lorahub_learning(task_lora_path=task_lora_path,
-                                                            lora_module_list=modules,
-                                                            example_inputs=example_inputs,
-                                                            example_outputs=examples_outputs,
-                                                            max_inference_step=40,
-                                                            batch_size=5)
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        # load basic model
+        default_peft_model_id = os.path.join(task_lora_path, target_task_name)
+        # find the base model
+        
+        model_name_or_path = PeftConfig.from_pretrained(default_peft_model_id).base_model_name_or_path
+            
+        base_model = AutoModelForSeq2SeqLM.from_pretrained(model_name_or_path)
+        # load tokenizer
+        tokenizer = AutoTokenizer.from_pretrained(model_name_or_path)
+        # 0 is the default model
+        try:
+            peft_model = PeftModel.from_pretrained(base_model, default_peft_model_id)
+        except:
+            raise Exception(f'{default_peft_model_id} is unable to load into the model {model_name_or_path}')
+            
+        peft_model = peft_model.to(device)
+        peft_model.eval()
 
-        print("module_weights:", module_weights)
 
         """
         Perform inference to get predictions
@@ -129,7 +125,7 @@ def main(task_lora_path, ood_dataset_path, ood_dataset_eval=None):
             examples_outputs.append(example["output"])
 
         example_predictions, perf = lorahub_inference(example_inputs=example_inputs,
-                                                    model_or_name_path=model,
+                                                    model_or_name_path=peft_model,
                                                     tokenizer_or_tokenizer_path=tokenizer,
                                                     batch_size=10,
                                                     # can set as None if you do not have the ground truth
@@ -141,20 +137,19 @@ def main(task_lora_path, ood_dataset_path, ood_dataset_eval=None):
         results.append({"task_name": target_task_name, "task_accuracy": perf})
     
         filename_suffix = "retrieved" if ood_dataset_eval is not None else "fixed"
-        filename = f"lorahub_results_{filename_suffix}.json"
+        filename = f"lorah_results_{filename_suffix}.json"
         with open(filename, 'w') as f:
             json.dump(results, f)
 
 
 if __name__ == "__main__":
     loras_path = '/home/ubuntu/victor/retrieval-of-experts/data/loras'
-    #ood_dataset_path = '/home/ubuntu/victor/retrieval-of-experts/data/flanv2_tokenized_new_splits/ood'
-    ood_dataset_path = '/home/ubuntu/victor/retrieval-of-experts/data/split_loras/ood'
-    
+    ood_dataset_path = '/home/ubuntu/victor/retrieval-of-experts/data/flanv2_tokenized_new_splits/ood'
+   
+
     ood_dataset_eval_path = '/home/ubuntu/victor/retrieval-of-experts/eval_output_dict_test.p'
     with open(ood_dataset_eval_path, "rb") as f:
         ood_dataset_eval = pickle.load(f)
 
     main(loras_path, ood_dataset_path, ood_dataset_eval)
-    
-    main(loras_path, ood_dataset_path)
+    #main(loras_path, ood_dataset_path)
