@@ -28,7 +28,12 @@ def load_base_model_and_lora_modules(lora_module_list: List[str], task_lora_path
     # use gpu if available
     device = "cuda" if torch.cuda.is_available() else "cpu"
     # load basic model
-    default_peft_model_id = os.path.join(task_lora_path, lora_module_list[0])
+    if isinstance(task_lora_path, str):
+        default_peft_model_id = os.path.join(task_lora_path, lora_module_list[0])
+    else:
+        default_peft_model_id = lora_module_list[0]
+
+    
     # find the base model
     if model_name_or_path is None:
         model_name_or_path = PeftConfig.from_pretrained(default_peft_model_id).base_model_name_or_path
@@ -52,7 +57,11 @@ def load_base_model_and_lora_modules(lora_module_list: List[str], task_lora_path
 
     for peft_model_id in tqdm(lora_module_list):
         #print("> Loading {} ...".format(peft_model_id))
-        cur_peft_model = PeftModel.from_pretrained(base_model, os.path.join(task_lora_path, peft_model_id))
+        if isinstance(task_lora_path, str):
+            cur_peft_model = PeftModel.from_pretrained(base_model, os.path.join(task_lora_path, peft_model_id))
+        else:
+            cur_peft_model = PeftModel.from_pretrained(base_model, peft_model_id)
+            
         cache[peft_model_id] = copy.deepcopy(get_peft_model_state_dict(cur_peft_model))
 
         if first_dict is None:
